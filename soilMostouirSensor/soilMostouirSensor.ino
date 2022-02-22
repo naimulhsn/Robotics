@@ -3,9 +3,10 @@
 
 void readSoilMoisture(){
   digitalWrite(MoistureSensorVCCpin, HIGH);
-  delay(100);
+  delay(50);
   int sensorValue = analogRead(MoistureSensor);
   Serial.println(sensorValue);
+  delay(50);
   digitalWrite(MoistureSensorVCCpin, LOW);
 }
 void setup() {
@@ -17,5 +18,5 @@ void setup() {
 }
 void loop() {
   readSoilMoisture();
-  delay(900);
+  delay(100);
 }

@@ -1,55 +1,56 @@
 #include "RTClib.h"
 RTC_DS3231 rtc;
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-
 
 #define MoistureSensorVCCpin 7
 #define MoistureSensor A0
 #define relayPin1 6
 #define flowsensor 2
 
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 volatile int flow_frequency;
 unsigned long one_sec = 1000L;
 unsigned long min_10 = one_sec * 600;
 unsigned long min_30 = one_sec * 1800;
 
-const int Container = 1;    // Number of Pots/ Tobs / Container / Drams 
+const int pot_size = 5; // Volume(Litre)of soil in each pot
+const int pot_number = 1;    // Number of Pots/ Tobs / Container / Drams 
 
 
 int lastWatered;
-int howMuchWater(int avg){
-  if(avg>900) return 1*Container;
-  if(avg>800) return 5*Container;
-  if(avg>700) return 4*Container;
-  if(avg>600) return 3*Container;
-  if(avg>500) return 2*Container;
-  if(avg>400) return 1*Container;
-  return 0;
+double howMuchWater(int avg){
+  int total_soil = pot_size*pot_number; 
+  if(avg>900) return 0.200*total_soil;
+  if(avg>700) return 0.175*total_soil;
+  if(avg>600) return 0.150*total_soil;
+  if(avg>500) return 0.125*total_soil;
+  if(avg>400) return 0.075*total_soil;
+  return 0.0;
 }
-int SoilMoisture(){
+double SoilMoisture(){
   unsigned long avgMoisture = 0;
-  int sample = 5;
+  int sample = 30;
   digitalWrite(MoistureSensorVCCpin, HIGH);
   delay(one_sec);
   for(int i=0; i<sample; i++){
     int sensorValue = analogRead(MoistureSensor);
     avgMoisture += sensorValue;
     //Serial.println(sensorValue);
-    delay(500);
+    delay(300);
   }
   digitalWrite(MoistureSensorVCCpin, LOW);
   avgMoisture /= sample;
   Serial.print("Avg Moisture = ");
   Serial.println(avgMoisture,DEC);
-  int needed_water = howMuchWater(avgMoisture);
+  double needed_water = howMuchWater(avgMoisture);
   return needed_water;
 }
 void flow () // Interrupt function
 {
    flow_frequency++;
 }
-int StartWatering(int needed_water){
+double StartWatering(double needed_water){
+  
   digitalWrite(relayPin1, LOW); // turn on Relay to start pump
   double total_volumn = 0.0; 
   float volumn;
@@ -57,9 +58,9 @@ int StartWatering(int needed_water){
   unsigned long cloopTime = millis();
   unsigned long currentTime = cloopTime;
   
-  unsigned long maxTime = currentTime + (needed_water+1)/2 * 60 * one_sec;
+  unsigned long maxTime = currentTime + (int)(needed_water+1) * 120 * one_sec;
   
-  while( (int)total_volumn < needed_water){
+  while(total_volumn < needed_water){
     currentTime = millis();
     
     if(currentTime >= (cloopTime + 1000)){
@@ -72,16 +73,16 @@ int StartWatering(int needed_water){
       volumn = litre_per_min/60.0;
       total_volumn += volumn;
       Serial.print("Given Water:");
-      Serial.println(total_volumn,4);
+      Serial.println(total_volumn,3);
     }
     
   }
-  needed_water = max(needed_water - (int)total_volumn, 0);
+  needed_water = max( (needed_water - total_volumn) , 0.0);
   Serial.print("More water needed :");
-  Serial.println(needed_water,4);
+  Serial.println(needed_water,3);
   DateTime now = rtc.now();
-  if(needed_water == 0)lastWatered = now.hour();
-  Serial.print("lastWatered :");
+  if(needed_water == 0.0)lastWatered = now.hour();
+  Serial.print("lastWatered (hr) :");
   Serial.println(lastWatered,DEC);
   digitalWrite(relayPin1, HIGH);
   return needed_water;
@@ -122,12 +123,14 @@ void loop() {
   DateTime now = rtc.now();
   int hr = now.hour();
   if( hr>(lastWatered+5) && (  (hr>=7 && hr <=9) || ( hr>=17 && hr<=20) ) ){
-    int needed_water = SoilMoisture();
-    Serial.print("Needed Water = ");
-    Serial.println(needed_water,DEC);
-    while(needed_water>0){
+    double needed_water = SoilMoisture();
+    Serial.print("Needed Water(L) = ");
+    Serial.println(needed_water,3);
+    Serial.println(" ");
+    while(needed_water>0.0){
       needed_water = StartWatering(needed_water);
-      delay(min_30);
+      Serial.println(" ");
+      delay(one_sec*60);
     }
     
   }
